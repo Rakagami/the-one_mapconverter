@@ -1,23 +1,43 @@
 #/usr/bin/python
 from bs4 import BeautifulSoup
 from svg.path import parser
-from svg.path import Move, Line
+from svg.path import Move, Line, Close
 import numpy as np
 import sys
+import tqdm
 
 transform = {
-        "scale": np.array([2.0, -2.0]),
-        "translate": np.array([126.0, 90.0]),
+        "scale": np.array([1.0, 1.0]),
+        "translate": np.array([0.0, 0.0]),
         }
+
+# Point is a numpy vector
+def coords_normalize(cs, point, thr=1.0):
+    for c in cs:
+        d = np.linalg.norm(c - point)
+        if(np.abs(d) < thr):
+            return c
+    cs.append(point)
+    return point
+
 
 def main(svg_filename, wkt_filename):
     with open(svg_filename, "r") as f:
         xml = f.read()
     
     main = BeautifulSoup(xml, "lxml")
+    main = main.find_all("g")
+    main = [g for g in main if g["inkscape:label"] == "Path"]
+
+    if(len(main) < 1):
+        raise Exception("svg path format not correct. No 'Path' layer")
+    else:
+        main = main[0]
+
+    cs = [] #coords set
 
     lines = []
-    for p in main.find_all("path"):
+    for p in tqdm.tqdm(main.find_all("path")):
         svg_path = p["d"]
         #coords = coords[1:-1].strip().split(" ")
         #coords = [c.split(",")[0] + " " + c.split(",")[1] for c in coords]
@@ -26,12 +46,18 @@ def main(svg_filename, wkt_filename):
         coords = []
         for point in path:
             if(type(point) == Move):
-                coords.append([point.start.real, point.start.imag])
+                np_p = np.array([point.start.real, point.start.imag])
+                coords.append(coords_normalize(cs, np_p))
             elif(type(point) == Line):
-                coords.append([point.end.real, point.end.imag])
+                np_p = np.array([point.end.real, point.end.imag])
+                coords.append(coords_normalize(cs, np_p))
+            elif(type(point) == Close):
+                #np_p = np.array([point.end.real, point.end.imag])
+                coords.append(coords[0].copy())
             else:
-                raise Exception("svg path format not correct")
+                raise Exception("svg path format not correct. There is an unsupported svg construct: "  + str(point))
         coords = np.array(coords)
+        coords = np.round(coords, decimals=2)
         coords += transform["translate"]
         coords *= transform["scale"]
         #print("Path", path)
