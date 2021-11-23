@@ -2,7 +2,13 @@
 from bs4 import BeautifulSoup
 from svg.path import parser
 from svg.path import Move, Line
+import numpy as np
 import sys
+
+transform = {
+        "scale": np.array([2.0, -2.0]),
+        "translate": np.array([126.0, 90.0]),
+        }
 
 def main(svg_filename, wkt_filename):
     with open(svg_filename, "r") as f:
@@ -25,6 +31,9 @@ def main(svg_filename, wkt_filename):
                 coords.append([point.end.real, point.end.imag])
             else:
                 raise Exception("svg path format not correct")
+        coords = np.array(coords)
+        coords += transform["translate"]
+        coords *= transform["scale"]
         #print("Path", path)
         #print("Coords", coords)
         str_coords = [str(c[0]) + " " + str(c[1]) for c in coords]
@@ -36,11 +45,20 @@ def main(svg_filename, wkt_filename):
                 ", ".join(l)
                 )
 
-    print(file_str)
+    origin_file_str = "LINESTRING (0 0, {})\n".format(lines[0][0])
+
+    #print(file_str)
     
     output_file = wkt_filename
     with open(output_file, "w") as f:
         f.write(file_str)
+
+    if len(output_file) > 4 and output_file[-4:] == ".wkt":
+        origin_file = output_file[:-4] + "_origin.wkt"
+    else:
+        origin_file = output_file + "_origin.wkt"
+    with open(origin_file, "w") as f:
+        f.write(origin_file_str)
 
     print("Generated output file in", output_file)
 
